@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Place ID Geocoder</title>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+    <meta charset="utf-8">
+    <style>
+        #map {
+            height: 100%;
+        }
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        .controls {
+            background-color: #fff;
+            border-radius: 2px;
+            border: 1px solid transparent;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+            box-sizing: border-box;
+            font-family: Roboto;
+            font-size: 15px;
+            font-weight: 300;
+            height: 40px;
+            margin-left: 20px;
+            margin-top: 10px;
+            outline: none;
+            padding: 0 11px 0 13px;
+            text-overflow: ellipsis;
+            width: 350px;
+        }
+        .controls:focus {
+            border-color: #4d90fe;
+        }
+        .attribute {
+            background-color: #fff;
+            border-radius: 2px;
+            border: 1px solid transparent;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+            box-sizing: border-box;
+            font-family: Roboto;
+            font-size: 15px;
+            font-weight: 300;
+            height: 40px;
+            margin-left: 20px;
+            margin-top: 10px;
+            outline: none;
+            padding: 0 11px 0 13px;
+            text-overflow: ellipsis;
+            width: 350px;
+        }
+        .attribute:focus {
+            border-color: #4d90fe;
+        }
+        .title {
+            font-weight: bold;
+        }
+        #infowindow-content {
+            display: none;
+        }
+        #map #infowindow-content {
+            display: inline;
+        }
+        #add {
+            background-color: #fff;
+            border-radius: 2px;
+            border: 1px solid transparent;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+            box-sizing: border-box;
+            font-family: Roboto;
+            font-size: 15px;
+            font-weight: 300;
+            height: 40px;
+            margin-left: 20px;
+            margin-top: 10px;
+            padding: 0 11px 0 13px;
+            text-overflow: ellipsis;
+            width: 150px;
+        }
+        #dwn {
+            background-color: #fff;
+            border-radius: 2px;
+            border: 1px solid transparent;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+            box-sizing: border-box;
+            font-family: Roboto;
+            font-size: 15px;
+            font-weight: 300;
+            height: 40px;
+            margin-left: 20px;
+            margin-top: 10px;
+            padding: 0 11px 0 13px;
+            text-overflow: ellipsis;
+            width: 150px;
+        }
+    </style>
+  </head>
+
+  <body>
+    <div style="display: none">
+        <input id="pac-input"
+            class="controls"
+            type="text"
+            placeholder="Enter a location">
+    </div>
+
+    <div style="display: none">
+        <input id="att-input"
+            class="attribute"
+            type="text"
+            placeholder="Enter a nearby building">
+        <button id="add" type="button">Search</button>
+        <button id="dwn" type="button">Download</button>
+    </div>
+
+    <div id="map"></div>
+
+    <div id="infowindow-content">
+        <span id="place-name" class="title"></span><br>
+        <strong>Place ID</strong>: <span id="place-id"></span><br>
+        <span id="place-address"></span>
+    </div>
+
+    <script>
+   
+function convertToCSV(objArray) {
+    var array = typeof objArray != 'object' ? JSON.parse(objArray) : objArray;
+    var str = '';
+    for (var i = 0; i < array.length; i++) {
+        var line = '';
+        for (var index in array[i]) {
+            if (line != '') line += ','
+            line += array[i][index];
+        }
+        str += line + '\r\n';
+    }
+    return str;
+}
+
+function exportCSVFile(headers, items, fileTitle) {
+    if (headers) {
+        items.unshift(headers);
+    }
+    var jsonObject = JSON.stringify(items);
+
+    var csv = this.convertToCSV(jsonObject);
+
+    var exportedFilenmae = fileTitle + '.csv' || 'export.csv';
+
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    if (navigator.msSaveBlob) { // IE 10+
+        navigator.msSaveBlob(blob, exportedFilenmae);
+    } else {
+        var link = document.createElement("a");
+        if (link.download !== undefined) { // feature detection
+            // Browsers that support HTML5 download attribute
+            var url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", exportedFilenmae);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    }
+}
+
+var headers = {
+    model: 'Phone Model'.replace(/,/g, ''), // remove commas to avoid errors
+    chargers: "Chargers",
+    cases: "Cases",
+    earphones: "Earphones"
+};
+
+itemsNotFormatted = [
+    {
+        model: 'Samsung S7',
+        chargers: '55',
+        cases: '56',
+        earphones: '57',
+        scratched: '2'
+    },
+    {
+        model: 'Pixel XL',
+        chargers: '77',
+        cases: '78',
+        earphones: '79',
+        scratched: '4'
+    },
+    {
+        model: 'iPhone 7',
+        chargers: '88',
+        cases: '89',
+        earphones: '90',
+        scratched: '6'
+    }
+];
+
+var itemsFormatted = [];
+
+// format the data
+itemsNotFormatted.forEach((item) => {
+    itemsFormatted.push({
+        model: item.model.replace(/,/g, ''), // remove commas to avoid errors,
+        chargers: item.chargers,
+        cases: item.cases,
+        earphones: item.earphones
+    });
+});
+
+var fileTitle = 'orders'; // or 'my-unique-title'
+
+function initMap() {
+    var map = new google.maps.Map(
+        document.getElementById('map'),
+        {center: {lat: 25.0374865, lng: 121.5647688}, zoom: 15}
+    );
+
+    var pacInput  = document.getElementById('pac-input');
+    var attInput  = document.getElementById('att-input');
+    var addButton = document.getElementById('add');
+    var dwnButton = document.getElementById('dwn');
+
+    var autocomplete = new google.maps.places.Autocomplete(pacInput);
+
+    autocomplete.bindTo('bounds', map);
+
+    // Specify just the place data fields that you need.
+    autocomplete.setFields(['place_id', 'geometry', 'name', 'formatted_address']);
+
+    map.controls[google.maps.ControlPosition.TOP_LEFT].push(pacInput);
+    map.controls[google.maps.ControlPosition.TOP_LEFT].push(attInput);
+    map.controls[google.maps.ControlPosition.TOP_LEFT].push(addButton);
+    map.controls[google.maps.ControlPosition.TOP_LEFT].push(dwnButton);
+
+    var infowindow = new google.maps.InfoWindow();
+    var infowindowContent = document.getElementById('infowindow-content');
+    infowindow.setContent(infowindowContent);
+
+    var geocoder = new google.maps.Geocoder;
+
+    var marker = new google.maps.Marker({map: map, icon: {url: "http://maps.google.com/mapfiles/ms/icons/red-dot.png"}});
+    marker.addListener('click', function() {
+        infowindow.open(map, marker);
+    });
+
+    var markers = [];
+    for(let i = 0; i < 20; i++) {
+        markers[i] = new google.maps.Marker({map: map, icon: {url: "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png"}});
+    }
+
+    dwnButton.addEventListener('click', function() {
+        //exportCSVFile(headers, itemsFormatted, fileTitle); // call the exportCSVFile() function to process the JSON and trigger the download
+    });
+
+    addButton.addEventListener('click', function() {
+        var place = autocomplete.getPlace();
+
+        if (!place.place_id) { return; }
+
+        for (var i = 0; i < 20; i++) { markers[i].setVisible(false); }
+
+        geocoder.geocode({'placeId': place.place_id}, function(results, status) {
+            if (status !== 'OK') {
+                window.alert('Geocoder failed due to: ' + status);
+                return;
+            }
+
+            var request = {
+                location: results[0].geometry.location,
+                radius: '500',
+                name: document.getElementById("att-input").value
+            };
+
+            service = new google.maps.places.PlacesService(map);
+            service.nearbySearch(request, function(results, status) {
+                if (status == google.maps.places.PlacesServiceStatus.OK) {
+                    for (var i = 0; i < 20; i++) {
+                        markers[i].setPlace({placeId: results[i].place_id, location: results[i].geometry.location});
+                        markers[i].setVisible(true);
+                        console.log(results[i]);
+                    }
+                }
+            });
+        }); 
+    });
+
+    var walkCircle, driveCircle, circle = false;
+
+    autocomplete.addListener('place_changed', function() {
+        infowindow.close();
+        var place = autocomplete.getPlace();
+
+        if (!place.place_id) { return; }
+
+        for (var i = 0; i < 20; i++) { markers[i].setVisible(false); }
+
+        geocoder.geocode({'placeId': place.place_id}, function(results, status) {
+            if (status !== 'OK') {
+                window.alert('Geocoder failed due to: ' + status);
+                return;
+            }
+
+            if (circle === true) {
+                walkCircle.setMap(null);
+                driveCircle.setMap(null);
+            }
+            circle = true;
+
+            walkCircle = new google.maps.Circle({
+                strokeColor: '#FF0000',
+                strokeOpacity: 0.6,
+                strokeWeight: 2,
+                fillColor: '#FF0000',
+                fillOpacity: 0.1,
+                map: map,
+                center: results[0].geometry.location,
+                radius: 200
+            });
+
+            driveCircle = new google.maps.Circle({
+                strokeColor: '#FF00FF',
+                strokeOpacity: 0.4,
+                strokeWeight: 2,
+                fillColor: '#FF00FF',
+                fillOpacity: 0.1,
+                map: map,
+                center: results[0].geometry.location,
+                radius: 1200
+            });
+
+            map.setZoom(16);
+            map.setCenter(results[0].geometry.location);
+
+            // Set the position of the marker using the place ID and location.
+            marker.setPlace({placeId: place.place_id, location: results[0].geometry.location});
+            marker.setVisible(true);
+
+            infowindowContent.children['place-name'].textContent = place.name;
+            infowindowContent.children['place-id'].textContent = place.place_id;
+            infowindowContent.children['place-address'].textContent = results[0].formatted_address;
+            infowindow.open(map, marker);
+        });
+    });
+}
+ 
+    </script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDIsdbgPKPoGO5JDF2NdyUjXX0FufENwh8 &libraries=places&callback=initMap"
+        async defer></script>
+  </body>
+</html>
